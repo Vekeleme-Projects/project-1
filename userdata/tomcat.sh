@@ -1,48 +1,118 @@
-TOMURL="https://archive.apache.org/dist/tomcat/tomcat-8/v8.5.37/bin/apache-tomcat-8.5.37.tar.gz"
-yum install java-1.8.0-openjdk -y
-yum install git maven wget -y
-cd /tmp/
-wget $TOMURL -O tomcatbin.tar.gz
-EXTOUT=`tar xzvf tomcatbin.tar.gz`
-TOMDIR=`echo $EXTOUT | cut -d '/' -f1`
-useradd --shell /sbin/nologin tomcat
-rsync -avzh /tmp/$TOMDIR/ /usr/local/tomcat8/
-chown -R tomcat.tomcat /usr/local/tomcat8
+#!/bin/bash
 
-rm -rf /etc/systemd/system/tomcat.service
+TOMCAT="https://downloads.apache.org/tomcat/tomcat-9/v9.0.73/bin/apache-tomcat-9.0.73.zip"
 
-cat <<EOT>> /etc/systemd/system/tomcat.service
-[Unit]
-Description=Tomcat
-After=network.target
+#installing maven
+sudo yum install maven git -y
 
-[Service]
-User=tomcat
-WorkingDirectory=/usr/local/tomcat8
-Environment=JRE_HOME=/usr/lib/jvm/jre
-Environment=JAVA_HOME=/usr/lib/jvm/jre
-Environment=CATALINA_HOME=/usr/local/tomcat8
-Environment=CATALINE_BASE=/usr/local/tomcat8
-ExecStart=/usr/local/tomcat8/bin/catalina.sh run
-ExecStop=/usr/local/tomcat8/bin/shutdown.sh
-SyslogIdentifier=tomcat-%i
 
-[Install]
-WantedBy=multi-user.target
-EOT
+#checking for java
+java -version
 
-systemctl daemon-reload
-systemctl start tomcat
-systemctl enable tomcat
+if [ $? -eq 0 ]
+then
+	echo "Java is already installed"
+else
+	echo "Installing Java"
+	sudo yum install java-1.8.0-openjdk-devel -y
+fi
 
-git clone -b vp-rem https://github.com/devopshydclub/vprofile-repo.git
-cd vprofile-repo
+#Installing necessary packages
+sudo yum install wget unzip -y
+
+
+#Check if tomcat directory exists
+if [ -d "/opt/tomcat" ]
+then
+	echo "Directory exists"
+else
+	sudo mkdir /opt/tomcat
+fi
+
+
+#Create System user for tomcat
+sudo useradd -m -U -d /opt/tomcat -s /bin/false tomcat
+
+
+cd /opt/tomcat
+
+#download tomcat
+sudo wget $TOMCAT
+
+#unzip zipped package
+sudo unzip apache-tomcat-*.zip
+
+#clean up zip package
+sudo rm -rf /opt/tomcat/apache-tomcat-*.zip
+
+#creating a soft link 
+sudo ln -s /opt/tomcat/apache-tomcat-* /opt/tomcat/latest
+
+#changing ownership to tomcat user
+sudo chown -R tomcat: /opt/tomcat/apache-tomcat-* /opt/tomcat/latest
+
+#giving executable permissions to all .sh in /bin
+sudo chmod +x /opt/tomcat/latest/bin/*.sh
+
+#setting up tomcat.service in systemd
+
+if [ -e "/etc/systemd/system/tomcat.service" ]
+then
+	echo "You already have tomcat.service in systemd"
+else
+	sudo touch /etc/systemd/system/tomcat.service
+
+	echo "[Unit]" >> /etc/systemd/system/tomcat.service
+	echo "Description=Tomcat Service" >> /etc/systemd/system/tomcat.service
+	echo "After=network.target" >> /etc/systemd/system/tomcat.service
+	echo " " >> /etc/systemd/system/tomcat.service
+	echo "[Service]" >> /etc/systemd/system/tomcat.service
+	echo "Type=forking" >> /etc/systemd/system/tomcat.service
+	echo "User=tomcat" >> /etc/systemd/system/tomcat.service
+	echo "Group=tomcat" >> /etc/systemd/system/tomcat.service
+	echo " " >> /etc/systemd/system/tomcat.service
+	echo "Environment=JAVA_HOME=/usr/lib/jvm/jre" >> /etc/systemd/system/tomcat.service
+	echo "Environment=JAVA_OPTS=-Djava.security.egd=file:///dev/urandom" >> /etc/systemd/system/tomcat.service
+	echo "Environment=CATALINA_BASE=/opt/tomcat/latest" >> /etc/systemd/system/tomcat.service
+	echo "Environment=CATALINA_HOME=/opt/tomcat/latest" >> /etc/systemd/system/tomcat.service
+	echo "Environment=CATALINA_PID=/opt/tomcat/latest/temp/tomcat.pid" >> /etc/systemd/system/tomcat.service
+	echo "Environment=CATALINA_OPTS=-Xms512M -Xmx1024M -server -XX:+UseParallelGC" >> /etc/systemd/system/tomcat.service
+	echo " " >> /etc/systemd/system/tomcat.service
+	echo "ExecStart=/opt/tomcat/latest/bin/startup.sh" >> /etc/systemd/system/tomcat.service
+	echo "ExecStop=/opt/tomcat/latest/bin/shutdown.sh" >> /etc/systemd/system/tomcat.service
+	echo " " >> /etc/systemd/system/tomcat.service
+	echo "[Install]" >> /etc/systemd/system/tomcat.service
+	echo "WantedBy=multi-user.target" >> /etc/systemd/system/tomcat.service
+
+	#Reloading system daemon
+	sudo systemctl daemon-reload
+	
+	sudo systemctl enable tomcat
+    #starting tomcat service
+	sudo systemctl start tomcat
+	
+    if [ $? -eq 0 ]
+	then
+		echo "Tomcat service started"
+	else:
+		echo "Please Use \"sudo systemctl status tomcat\" to diagnose"
+	fi
+
+	echo "You've successfully installed tomcat as a service"
+	echo "use sudo systemctl start|stop|restart|enable|disable tomcat"
+
+fi
+
+git clone https://github.com/Vekeleme-Projects/project-1.git
+cd project-1
 mvn install
 systemctl stop tomcat
 sleep 120
-rm -rf /usr/local/tomcat8/webapps/ROOT*
-cp target/vprofile-v2.war /usr/local/tomcat8/webapps/ROOT.war
+rm -rf /opt/tomcat/latest/webapps/ROOT*
+cp target/vprofile-v2.war /opt/tomcat/latest/webapps/ROOT.war
 systemctl start tomcat
 sleep 300
-cp /vprofile-vm-data/application.properties /usr/local/tomcat8/webapps/ROOT/WEB-INF/classes/application.properties
-systemctl restart tomcat8
+cp target/classes/application.properties /opt/tomcat/latest/webapps/ROOT/WEB-INF/classes/application.properties
+systemctl restart tomcat
+
+
