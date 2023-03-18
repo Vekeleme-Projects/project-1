@@ -16,9 +16,9 @@
 - MySQL
 # Database
 Here,we used Mysql DB 
-MSQL DB Installation Steps for Linux ubuntu 14.04:
-- $ sudo apt-get update
-- $ sudo apt-get install mysql-server
+MySQL DB Installation Steps for Linux Centos 7:
+- $ sudo yum update -y
+- $ sudo yum install mariadb-server -y
 
 Then look for the file :
 - /src/main/resources/accountsdb
